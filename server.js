@@ -1,5 +1,5 @@
 const express = require('express');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const cors = require('cors');
 require('dotenv').config();
 
@@ -7,9 +7,17 @@ const app = express();
 
 // Middleware
 app.use(express.json());
-app.use(cors()); // Allows your React frontend to connect
+app.use(cors());
 
-// Contact Route
+// Initialize Resend with your API key from environment variables
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+// Optional: Fallback GET route so visiting your URL in the browser doesn't say "Cannot GET"
+app.get('/api/contact', (req, res) => {
+  res.status(200).json({ message: 'Contact API is running! Use POST to send messages.' });
+});
+
+// Contact POST Route
 app.post('/api/contact', async (req, res) => {
   const { name, email, message } = req.body;
 
@@ -18,30 +26,17 @@ app.post('/api/contact', async (req, res) => {
   }
 
   try {
-    const transporter = nodemailer.createTransport({
-      service: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-      tls: {
-        rejectUnauthorized: false
-      },
-      connectionTimeout: 10000,
-    });
-
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: process.env.EMAIL_USER, // Sends the email straight to your own inbox
+    const data = await resend.emails.send({
+      from: 'Portfolio Contact <onboarding@resend.dev>', // Resend's required default sender for free accounts
+      to: process.env.MY_EMAIL, // Your personal email address where you want to receive messages
       subject: `New Portfolio Message from ${name}`,
       text: `Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`,
     });
 
+    console.log('Email sent successfully:', data);
     res.status(200).json({ success: true, message: 'Email sent successfully!' });
   } catch (error) {
-    console.error('Email error:', error);
+    console.error('Resend error:', error);
     res.status(500).json({ success: false, error: 'Failed to send email.' });
   }
 });
